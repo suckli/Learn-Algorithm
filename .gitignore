@@ -87,3 +87,13 @@ coverage.xml
 
 # Sphinx documentation
 docs/_build/
+
+
+*.dsw
+*.dsp
+*.ncb
+*.opt
+*.pch
+*.pdb
+*.ilk
+*.idb
