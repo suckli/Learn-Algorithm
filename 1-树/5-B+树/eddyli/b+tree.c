@@ -14,15 +14,16 @@ int _get_index_in_parent(Node* node) {
     }
 	return -1;
 }
+
 int _insert(int item, int **k, int count) {
     int *keys;
 	int i;
     for (i = 0; i < count; i++) {
-        if (*k[i] == item)
+        if ((*k)[i] == item)
             return 0;
-        if (*k[i] > item) {
+        if ((*k)[i] > item) {
             keys = (int *)calloc(count+1, sizeof(int));
-            memcpy(keys, *k, sizeof(int)*(i-1));
+            memcpy(keys, *k, sizeof(int)*i);
             keys[i] = item;
             memcpy(keys+i+1, *k+i+1, sizeof(int)*(count-i));
             free(*k);
@@ -44,22 +45,25 @@ void _insert2parent(Node* leaf, Node* node) {
 
     index = _get_index_in_parent(leaf);
     children = (Node**)calloc(count + 1, sizeof(Node*));
-    memcpy(children, parent->children,  sizeof(Node*) * index);
+    memcpy(children, parent->children,  sizeof(Node*) * (index+1) );
     children[index+1] = node;
-    memcpy(children+index+1+1, parent->children+index+1, count-index);
+    memcpy(children+index+1+1, parent->children+index+1, count-index-1);
     free(parent->children);
     parent->children = children;
     
     _insert(leaf->keys[leaf->count-1], &parent->keys, parent->count);
+	parent->count += 1;
 }
 
 void _split(Node* lleaf, BPtree*tree) {
     int i;
-    Node* new_parent;
-    int count = lleaf->count;
-    int half = count/2;
-    
+	int frends_count = 0;
+    Node* new_parent, *tmp;
 
+    int count = lleaf->count;
+
+	//new node has half of orignal keys
+    int half = count/2;
     Node* node = (Node*)calloc(1,sizeof(Node));
     node->keys = (int*)calloc(half, sizeof(int));
     node->count = half;
@@ -72,40 +76,57 @@ void _split(Node* lleaf, BPtree*tree) {
     }
 
     lleaf->next = node;
+	//just set count is ok
     lleaf->count = lleaf->count-half;
 
     if (lleaf->parent != NULL) {
         _insert2parent(lleaf, node);
-         if (lleaf->parent->count > tree->m) 
-            _split(lleaf->parent, tree);
+        if (lleaf->parent->count > tree->m) 
+			_split(lleaf->parent, tree);
     } else {
-        new_parent = (Node*)calloc(1, sizeof(Node*));
-        new_parent->count = 2;
-        new_parent->children = (Node**)calloc(2, sizeof(Node*));
-        new_parent->keys = (int*)calloc(2, sizeof(int));
-        new_parent->children[0] = lleaf;
-        new_parent->children[1] = node;
-        
-        new_parent->keys[0] = lleaf->keys[lleaf->count - 1];
-        new_parent->keys[1] = node->keys[node->count - 1];
+        new_parent = (Node*)calloc(1, sizeof(Node));
+		tmp = lleaf;
+		while(tmp != NULL) {
+			frends_count += 1;
+			tmp = tmp->next;
+		}
+
+        new_parent->count = frends_count;
+        new_parent->children = (Node**)calloc(frends_count, sizeof(Node*));
+        new_parent->keys = (int*)calloc(frends_count, sizeof(int));
+		tmp = lleaf;
+		i = 0;
+		while(tmp != NULL) {
+			new_parent->children[i] = tmp;
+			tmp->parent = new_parent;
+			tmp = tmp->next;
+			i+=1;
+		}
+        tmp = lleaf;
+		i = 0;
+		while (tmp != NULL) {
+			new_parent->keys[i] = tmp->keys[tmp->count - 1];
+			i+=1;
+			tmp = tmp->next;
+		}
         tree->root = new_parent;
     }
-
 }
 
-
-
 void _append(int item, int **k, int count) {
-    int * keys = (int*)calloc(count+1,sizeof(int));
+	int real = count + 1;
+    int * keys = (int*)calloc(real, sizeof(int));
     memcpy(keys, *k, sizeof(int)*count);
     keys[count] = item;
-    free(*k);
+	if (*k != NULL)
+		free(*k);
     *k = keys;
 }
 
 int insert(int item, BPtree* tree) {
     int min;
 	int count;
+	int index;
     Node * lleaf;
     lleaf = tree->lleaf;
     count = lleaf->count;
@@ -114,16 +135,24 @@ int insert(int item, BPtree* tree) {
         min = tree->m/2+1;
 
     while(1) {
+		//TODO:this is a liner insert, change 2 tree insert
         if (_insert(item, &lleaf->keys, count) == 0) {
             lleaf->count+=1;
             break;
         }
+		
+		if (lleaf->next == NULL) {
+			_append(item, &lleaf->keys, count);
+			lleaf->count+=1;   
+			if (lleaf->parent != NULL) {
+				//update the max value in parent
+				index = _get_index_in_parent(lleaf);
+				lleaf->parent->keys[index] = item;
+			}
+			break;
+		}
+		lleaf = lleaf->next;
 
-        if (lleaf->next == NULL) {
-            _append(item,&lleaf->keys,count);
-            lleaf->count+=1;
-            break;
-        }
     }
 
     if (lleaf->count > tree->m) {
